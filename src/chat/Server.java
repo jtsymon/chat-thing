@@ -57,11 +57,6 @@ public class Server extends Thread {
 
         @Override
         public void run() {
-            byte[] serverInfo = new byte[2 + 1 + Server.this.nameBuffer.length];
-            serverInfo[0] = (byte) ((Server.this.port >> 8) & 0xFF);
-            serverInfo[1] = (byte) ((Server.this.port) & 0xFF);
-            serverInfo[2] = (byte) Server.this.nameBuffer.length;
-            System.arraycopy(Server.this.nameBuffer, 0, serverInfo, 3, Server.this.nameBuffer.length);
             MULTICAST_LISTEN:
             while (Server.this._running) {
                 try {
@@ -76,7 +71,7 @@ public class Server extends Thread {
                             continue MULTICAST_LISTEN;
                         }
                     }
-                    dp = new DatagramPacket(serverInfo, serverInfo.length, dp.getAddress(), dp.getPort());
+                    dp = new DatagramPacket(Server.this.infoBuffer, Server.this.infoBuffer.length, dp.getAddress(), dp.getPort());
                     this.socket.send(dp);
                 } catch (SocketTimeoutException e) {
                     // do nothing (timeouts are enabled so we can stop the server cleanly)
@@ -100,8 +95,8 @@ public class Server extends Thread {
     }
 
     private String name;
-    private final byte[] nameBuffer;
-    private final byte[] passBuffer;
+    private byte[] infoBuffer;
+    private byte[] passBuffer;
     public final int port;
     private final BroadcastListener multicastListener;
     private final ServerSocketChannel ssc;
@@ -118,8 +113,7 @@ public class Server extends Thread {
         if (password.length() > MAX_PASSWORD_LENGTH) {
             throw new IOException("Server password too long!");
         }
-        this.name = name;
-        this.nameBuffer = name.getBytes(Chat.charset);
+        this.updateName(name);
         this.passBuffer = password.getBytes(Chat.charset);
         this.multicastListener = new BroadcastListener();
         this.ssc = ServerSocketChannel.open();
@@ -130,7 +124,7 @@ public class Server extends Thread {
             this.ssc.socket().bind(new InetSocketAddress(0));
         }
         this.port = this.ssc.socket().getLocalPort();
-        generateWelcomeMessage();
+        this.generateWelcomeMessage();
         this.ssc.configureBlocking(false);
         this.selector = Selector.open();
         this.ssc.register(selector, SelectionKey.OP_ACCEPT);
@@ -212,6 +206,17 @@ public class Server extends Thread {
         this.welcomeBuf = Encoding.byteEncode(welcome.toString());
         System.out.println("Welcome message = '" + welcome.toString() + "'");
     }
+    
+    private void updateName(String name) {
+        this.name = name;
+        byte[] nameBuffer = name.getBytes(Chat.charset);
+        this.infoBuffer = new byte[2 + 1 + nameBuffer.length];
+        this.infoBuffer[0] = (byte) ((this.port >> 8) & 0xFF);
+        this.infoBuffer[1] = (byte) ((this.port) & 0xFF);
+        this.infoBuffer[2] = (byte) nameBuffer.length;
+        System.arraycopy(nameBuffer, 0, this.infoBuffer, 3, nameBuffer.length);
+        this.generateWelcomeMessage();
+    }
 
     private void handleMessage(User user, SelectionKey key) throws IOException {
         user.buffer.flip();
@@ -241,11 +246,17 @@ public class Server extends Thread {
                     if (command[1].length() > MAX_NAME_LENGTH) {
                         tell(key, "Cannot set the name (too long)");
                     } else {
-                        this.name = command[1];
-                        this.generateWelcomeMessage();
+                        this.updateName(command[1]);
                         broadcastRaw(ControlMessages.chat_name(this.name));
                     }
                     break;
+                case "/nick":
+                    if (command[1].length() > MAX_NAME_LENGTH) {
+                        tell(key, "Cannot set the nick (too long)");
+                    } else {
+                        broadcastRaw(ControlMessages.user_rename(user.username, command[1]));
+                        user.username = command[1];
+                    }
             }
         } else {
             this.broadcast(user.username + ": " + new String(data, Chat.charset));

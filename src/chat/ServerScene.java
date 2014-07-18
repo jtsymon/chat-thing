@@ -60,29 +60,46 @@ public class ServerScene extends Scene {
         
         private void handleMessage(byte[] buf, int n) {
             if (buf[0] == ControlMessages.CONTROL_MESSAGE_ID) {
+                
                 int length = buf[2];
-                final String name = new String(buf, 3, length, Chat.charset);
+                
                 switch (buf[1]) {
                     case ControlMessages.USER_JOINED:
                     case ControlMessages.USER_JOINED_SILENT:
+                        final String joined_name = new String(buf, 3, length, Chat.charset);
                         Platform.runLater(() -> {
-                            ServerScene.this.peers.add(name);
+                            ServerScene.this.peers.add(joined_name);
                             if (buf[1] == ControlMessages.USER_JOINED) {
-                                ServerScene.this.messages.appendText(name + " joined the chat\n");
+                                ServerScene.this.messages.appendText(joined_name + " joined the chat\n");
                             }
                         });
                         break;
                     case ControlMessages.USER_LEFT:
+                        final String left_name = new String(buf, 3, length, Chat.charset);
                         Platform.runLater(() -> {
-                            ServerScene.this.peers.remove(name);
-                            ServerScene.this.messages.appendText(name + " left the chat\n");
+                            ServerScene.this.peers.remove(left_name);
+                            ServerScene.this.messages.appendText(left_name + " left the chat\n");
                         });
                         break;
                     case ControlMessages.CHAT_NAME:
+                        final String chat_name = new String(buf, 3, length, Chat.charset);
                         Platform.runLater(() -> {
-                            ServerScene.this.serverName.setText(name);
+                            ServerScene.this.serverName.setText(chat_name);
                         });
                         break;
+                    case ControlMessages.USER_RENAME:
+                        for (int i = 3; i < n; i++) {
+                            if (buf[i] == 0) {
+                                final String prevName = new String(buf, 3, i - 3, Chat.charset);
+                                final String newName = new String(buf, i + 1, length - i + 2, Chat.charset);
+                                Platform.runLater(() -> {
+                                    int index = ServerScene.this.peers.indexOf(prevName);
+                                    ServerScene.this.peers.set(index, newName);
+                                    ServerScene.this.messages.appendText(prevName + " changed their name to " + newName + "\n");
+                                });
+                                break;
+                            }
+                        }
                 }
             } else {
                 final String message = new String(buf, 0, n, Chat.charset);
