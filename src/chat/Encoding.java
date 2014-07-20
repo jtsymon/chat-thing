@@ -23,9 +23,8 @@ import java.nio.ByteBuffer;
  *
  * @author jts
  */
-
-
 public class Encoding {
+
     public static ByteBuffer byteEncode(String msg) {
         byte[] str = msg.getBytes(Chat.charset);
         byte[] buf = new byte[str.length + 1];
@@ -33,7 +32,7 @@ public class Encoding {
         buf[str.length] = -1;
         return ByteBuffer.wrap(buf);
     }
-    
+
     public static byte[] encodeInfoBuffer(String name, int port) {
         byte[] nameBuffer = name.getBytes(Chat.charset);
         byte[] infoBuffer = new byte[2 + 1 + nameBuffer.length];
@@ -43,13 +42,12 @@ public class Encoding {
         System.arraycopy(nameBuffer, 0, infoBuffer, 3, nameBuffer.length);
         return infoBuffer;
     }
-    
+
     public static ServerInfo decodeInfoBuffer(InetAddress source, byte[] infoBuffer) {
         int port = ((infoBuffer[0] & 0xFF) << 8) | (infoBuffer[1] & 0xFF);
         byte[] nameBuffer = new byte[infoBuffer[2]];
         System.arraycopy(infoBuffer, 3, nameBuffer, 0, nameBuffer.length);
-        ServerInfo server = new ServerInfo(source, port);
-        server.setName(new String(nameBuffer, Chat.charset));
+        ServerInfo server = new ServerInfo(new String(nameBuffer, Chat.charset), source, port);
         return server;
     }
 }

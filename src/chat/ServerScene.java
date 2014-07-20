@@ -27,8 +27,6 @@ import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.Scene;
-import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TextArea;
@@ -43,7 +41,7 @@ import javafx.scene.text.FontWeight;
  *
  * @author jts
  */
-public class ServerScene extends Scene {
+public class ServerScene extends ChatScene {
 
     public class ServerConnection extends Thread {
 
@@ -57,12 +55,12 @@ public class ServerScene extends Scene {
             this.password = password;
             this.start();
         }
-        
+
         private void handleMessage(byte[] buf, int n) {
             if (buf[0] == ControlMessages.CONTROL_MESSAGE_ID) {
-                
+
                 int length = buf[2];
-                
+
                 switch (buf[1]) {
                     case ControlMessages.USER_JOINED:
                     case ControlMessages.USER_JOINED_SILENT:
@@ -158,12 +156,9 @@ public class ServerScene extends Scene {
                     }
                 }
             } catch (IOException e) {
-                // do nothing (drop down to the cleanup below)
+                Chat.popScene();
             }
-            Platform.runLater(() -> {
-                Chat.killServer();
-                Chat.setScene(new MainScene());
-            });
+            Chat.killServer();
         }
 
         public void send(String message) {
@@ -192,7 +187,7 @@ public class ServerScene extends Scene {
     private final Label serverName;
 
     public ServerScene(String password, InetAddress addr, int port) throws IOException {
-        super(new HBox(), 600, 400);
+        super(new VBox(), 600, 400);
 
         if (password.length() > Server.MAX_PASSWORD_LENGTH) {
             throw new IOException("Server password too long!");
@@ -200,19 +195,10 @@ public class ServerScene extends Scene {
 
         this.serverConnection = new ServerConnection(addr, password, port);
 
-        VBox chat = new VBox();
-        chat.setAlignment(Pos.TOP_LEFT);
-        messages = new TextArea("");
-        messages.setEditable(false);
-        VBox.setVgrow(messages, Priority.ALWAYS);
-        TextField input = new TextField();
-        input.setOnAction((ActionEvent e) -> {
-            if (input.getText().trim().length() > 0) {
-                this.serverConnection.send(input.getText());
-            }
-            input.setText("");
-        });
-        chat.getChildren().addAll(messages, input);
+        this.messages = new TextArea("");
+        this.messages.setEditable(false);
+        VBox.setVgrow(this.messages, Priority.ALWAYS);
+        
         VBox sidebar = new VBox();
         sidebar.setMaxWidth(200);
         sidebar.setPrefWidth(200);
@@ -223,15 +209,31 @@ public class ServerScene extends Scene {
         serverName.setFont(Font.font("sans-serif", FontWeight.BOLD, 12));
         ListView<String> peersView = new ListView<>(this.peers);
         VBox.setVgrow(peersView, Priority.ALWAYS);
-        Button back = new Button("Back");
-        back.setOnAction((ActionEvent e) -> {
-            Chat.killServer();
-            Chat.setScene(new MainScene());
-        });
-        back.setPrefWidth(200);
-        sidebar.getChildren().addAll(serverName, peersView, back);
-        HBox.setHgrow(chat, Priority.ALWAYS);
+        sidebar.getChildren().addAll(serverName, peersView);
+        
+        HBox main = new HBox();
+        HBox.setHgrow(this.messages, Priority.ALWAYS);
         HBox.setHgrow(sidebar, Priority.NEVER);
-        ((HBox) this.getRoot()).getChildren().addAll(chat, sidebar);
+        VBox.setVgrow(main, Priority.ALWAYS);
+        main.getChildren().addAll(this.messages, sidebar);
+        
+        
+        TextField inputField = new TextField();
+        inputField.setOnAction((ActionEvent e) -> {
+            if (inputField.getText().trim().length() > 0) {
+                this.serverConnection.send(inputField.getText());
+            }
+            inputField.setText("");
+        });
+        HBox.setHgrow(inputField, Priority.ALWAYS);
+        HBox controls = ChatScene.defaultControls();
+        controls.getChildren().add(0, inputField);
+        
+        ((VBox) this.getRoot()).getChildren().addAll(main, controls);
+    }
+
+    @Override
+    public void shutdown() {
+        this.serverConnection.shutdown();
     }
 }

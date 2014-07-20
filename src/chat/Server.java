@@ -17,13 +17,18 @@
 package chat;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.MalformedURLException;
 import java.net.MulticastSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.net.URL;
+import java.net.URLEncoder;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
@@ -32,6 +37,10 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
@@ -44,6 +53,7 @@ public class Server extends Thread {
     public static final int MAX_PASSWORD_LENGTH = 254;
     public static final int DEFAULT_PORT = 50505;
     public static final InetAddress BROADCAST_IP;
+
     static {
         InetAddress tmp = null;
         try {
@@ -101,6 +111,42 @@ public class Server extends Thread {
             }
         }
     }
+    
+    private class PublicPhoneHome extends Thread {
+        
+        private final List<ServerSource> sources;
+        
+        public PublicPhoneHome(List<ServerSource> sources) {
+            this.sources = sources;
+        }
+        
+        @Override
+        public void run() {
+            while (Server.this._running) {
+                try {
+                String info = "?name=" + URLEncoder.encode(Server.this.name, "UTF-8") + "&port=" +
+                        URLEncoder.encode(Integer.toString(Server.this.port), "UTF-8");
+                    for (ServerSource source : this.sources) {
+                        try {
+                            HttpURLConnection connection = (HttpURLConnection)new URL("http://" + source.getAddress() + info).openConnection();
+                            connection.getResponseCode();
+                        } catch (IOException e) {
+                            System.err.println(e);
+                        }
+                    }
+                } catch (UnsupportedEncodingException e) {
+                    System.err.println("Failed to URL encode server info");
+                    System.err.println(e);
+                    break;
+                }
+                try {
+                    Thread.sleep(60000);
+                } catch (InterruptedException e) {
+                    System.err.println(e);
+                }
+            }
+        }
+    }
 
     private static class User {
 
@@ -119,13 +165,14 @@ public class Server extends Thread {
     private byte[] passBuffer;
     public final int port;
     private final BroadcastListener multicastListener;
+    private final PublicPhoneHome publicPhoneHome;
     private final ServerSocketChannel ssc;
     private final Selector selector;
     private String[] welcomeTokens = new String[]{"Welcome to ", "!"};
     private ByteBuffer welcomeBuf;
     private boolean _running = true;
 
-    public Server(String name, String password) throws IOException {
+    public Server(String name, String password, boolean isPublic) throws IOException {
         super();
         if (name.length() > MAX_NAME_LENGTH) {
             throw new IOException("Server name too long!");
@@ -135,6 +182,15 @@ public class Server extends Thread {
         }
         this.passBuffer = password.getBytes(Chat.charset);
         this.multicastListener = new BroadcastListener();
+        if (isPublic) {
+            // TODO: implement some way of adding sources for the server to update
+            // maybe make the server browser's list global?
+            List<ServerSource> sources = new LinkedList<>();
+            sources.add(new ServerSource("jt-symon.rhcloud.com/endpoint/chat"));
+            this.publicPhoneHome = new PublicPhoneHome(sources);
+        } else {
+            this.publicPhoneHome = null;
+        }
         this.ssc = ServerSocketChannel.open();
         try {
             // try default port
@@ -150,6 +206,7 @@ public class Server extends Thread {
         this.ssc.register(selector, SelectionKey.OP_ACCEPT);
         this.start();
         this.multicastListener.start();
+        this.publicPhoneHome.start();
     }
 
     private void handleAccept(SelectionKey key) throws IOException {
@@ -226,7 +283,7 @@ public class Server extends Thread {
         this.welcomeBuf = Encoding.byteEncode(welcome.toString());
         System.out.println("Welcome message = '" + welcome.toString() + "'");
     }
-    
+
     private void updateName(String name) {
         this.name = name;
         this.infoBuffer = Encoding.encodeInfoBuffer(this.name, this.port);
@@ -384,12 +441,17 @@ public class Server extends Thread {
 
     public void shutdown() {
         this._running = false;
-        System.err.println("Waiting for servers to exit...");
+        System.err.println("Waiting for server to exit...");
         try {
             this.selector.wakeup();
             this.ssc.close();
             this.join();
             this.multicastListener.join();
+            if (this.publicPhoneHome != null) {
+                this.publicPhoneHome.interrupt();
+                this.publicPhoneHome.join();
+            }
+            System.err.println("Server exited cleanly");
         } catch (IOException | InterruptedException e) {
             System.err.println(e);
         }

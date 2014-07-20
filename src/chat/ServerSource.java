@@ -16,7 +16,6 @@
  */
 package chat;
 
-
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.SimpleBooleanProperty;
@@ -25,51 +24,77 @@ import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.beans.value.ObservableValue;
+
 /**
  *
  * @author jts
  */
 public class ServerSource {
-    
+
     private final StringProperty address;
-    public void setAddress(String value) { addressProperty().set(value); }
-    public String getAddress() { return addressProperty().get(); }
+
+    public void setAddress(String value) {
+        addressProperty().set(value);
+    }
+
+    public String getAddress() {
+        return addressProperty().get();
+    }
+
     public StringProperty addressProperty() {
         return address;
     }
 
     private final IntegerProperty port;
-    public void setPort(Integer value) { portProperty().set(value); }
-    public Integer getPort() { return portProperty().get(); }
-    public IntegerProperty portProperty() { 
+
+    public void setPort(Integer value) {
+        portProperty().set(value);
+    }
+
+    public Integer getPort() {
+        return portProperty().get();
+    }
+
+    public IntegerProperty portProperty() {
         return port;
     }
-    
+
     private final BooleanProperty enabled;
-    public void setEnabled(Boolean value) { enabledProperty().set(value); }
-    public Boolean getEnabled() { return enabledProperty().get(); }
-    public BooleanProperty enabledProperty() { 
+
+    public void setEnabled(Boolean value) {
+        enabledProperty().set(value);
+    }
+
+    public Boolean getEnabled() {
+        return enabledProperty().get();
+    }
+
+    public BooleanProperty enabledProperty() {
         return enabled;
     }
-    
+
     public final boolean isLocal;
-    
+
     public final ObservableValue<ServerSource> observable = new SimpleObjectProperty<>(this);
-    
+
     public ServerSource(String address, int port) {
         this.address = new SimpleStringProperty(address);
         this.port = new SimpleIntegerProperty(port);
         this.enabled = new SimpleBooleanProperty(false);
         this.isLocal = false;
     }
-    
+
+    public ServerSource(String address) {
+        this(address, 80);
+    }
+
     private ServerSource() {
         this.address = new SimpleStringProperty("LAN");
         this.port = new SimpleIntegerProperty(Server.DEFAULT_PORT);
         this.enabled = new SimpleBooleanProperty(true);
         this.isLocal = true;
     }
-    
+
     public static ServerSource getLAN() {
         return new ServerSource();
     }

@@ -20,53 +20,58 @@ import java.io.IOException;
 import java.net.InetAddress;
 import javafx.event.ActionEvent;
 import javafx.geometry.Pos;
-import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.TextField;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
 /**
  *
  * @author jts
  */
-public class ServerConnectScene extends Scene {
+public class ServerConnectScene extends ChatScene {
 
-    private static VBox init() {
+    public ServerConnectScene() {
+        super(new VBox(), 600, 400);
+        
+        TextField addressField = new TextField();
+        addressField.setPromptText("Server Address");
+        addressField.setMaxWidth(200);
 
-        TextField address = new TextField();
-        address.setPromptText("Server Address");
-        address.setMaxWidth(200);
+        TextField portField = new TextField("50505");
+        portField.setPromptText("Server Port");
+        portField.setMaxWidth(200);
 
-        TextField port = new TextField("50505");
-        port.setPromptText("Server Port");
-        port.setMaxWidth(200);
-
-        TextField password = new TextField();
-        password.setPromptText("Password");
-        password.setMaxWidth(200);
-
-        Button connect = new Button("Connect");
-        connect.setOnAction((ActionEvent e) -> {
+        TextField passwordField = new TextField();
+        passwordField.setPromptText("Password");
+        passwordField.setMaxWidth(200);
+        
+        VBox main = new VBox(8);
+        main.setAlignment(Pos.CENTER);
+        VBox.setVgrow(main, Priority.ALWAYS);
+        main.getChildren().addAll(addressField, portField, passwordField);
+        
+        Button connectButton = new Button("Connect");
+        connectButton.setPrefWidth(100);
+        connectButton.setOnAction((ActionEvent e) -> {
             try {
-                Chat.setScene(new ServerScene(password.getText(), InetAddress.getByName(address.getText()), Integer.parseInt(port.getText())));
+                Chat.pushScene(new ServerScene(passwordField.getText(), InetAddress.getByName(addressField.getText()), Integer.parseInt(portField.getText())));
             } catch (IOException ioe) {
                 System.err.println("Failed to connect to server: " + ioe.getLocalizedMessage());
             }
         });
 
-        Button cancel = new Button("Cancel");
-        cancel.setOnAction((ActionEvent e) -> {
-            Chat.setScene(new MainScene());
-        });
-
-        VBox layout = new VBox(8);
-        layout.setAlignment(Pos.CENTER);
-        layout.getChildren().addAll(address, port, password, connect, cancel);
-
-        return layout;
+        HBox controls = ChatScene.defaultControls();
+        controls.getChildren().add(0, connectButton);
+        
+        VBox root = (VBox) this.getRoot();
+        root.setAlignment(Pos.CENTER);
+        root.getChildren().addAll(main, controls);
     }
 
-    public ServerConnectScene() {
-        super(init(), 600, 400);
+    @Override
+    public void shutdown() {
+
     }
 }

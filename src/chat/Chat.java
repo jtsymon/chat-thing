@@ -18,17 +18,15 @@ package chat;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.util.Stack;
 import javafx.application.Application;
-import javafx.scene.Scene;
 import javafx.stage.Stage;
 
 /**
  *
  * @author jts
- * 
- * TODO: 
- * Implement error messages when a connection gets rejected (say why)
- * Implement broadcasting to find servers on LAN
+ *
+ * TODO: Implement error messages when a connection gets rejected (say why)
  */
 public class Chat extends Application {
 
@@ -38,13 +36,14 @@ public class Chat extends Application {
     private static String _username = "";
     private static Server _server;
     private Stage stage;
+    private static final Stack<ChatScene> _sceneStack = new Stack<>();
 
     public static String getUsername() {
         return _username;
     }
 
-    public static Server initServer(String name, String password) throws IOException {
-        _server = new Server(name, password);
+    public static Server initServer(String name, String password, boolean isPublic) throws IOException {
+        _server = new Server(name, password, isPublic);
         return _server;
     }
 
@@ -56,9 +55,6 @@ public class Chat extends Application {
         if (_server != null) {
             _server.shutdown();
             _server = null;
-        }
-        if (_instance.stage.getScene() instanceof ServerScene) {
-            ((ServerScene) _instance.stage.getScene()).serverConnection.shutdown();
         }
     }
 
@@ -72,8 +68,36 @@ public class Chat extends Application {
         }
     }
 
-    public static void setScene(Scene scene) {
+    /**
+     * Swaps the current scene for a new scene
+     *
+     * @param scene
+     */
+    public static void setScene(ChatScene scene) {
+        _sceneStack.pop();
+        _sceneStack.push(scene);
         _instance.stage.setScene(scene);
+    }
+
+    /**
+     * Pushes the current scene onto the stack, and sets the scene to a new scene
+     *
+     * @param scene
+     */
+    public static void pushScene(ChatScene scene) {
+        _sceneStack.push(scene);
+        _instance.stage.setScene(scene);
+    }
+
+    /**
+     * Sets the current scene to the scene from the top of the stack
+     */
+    public static void popScene() {
+        _sceneStack.pop().shutdown();
+        if (_sceneStack.empty()) {
+            _sceneStack.push(new MainScene());
+        }
+        _instance.stage.setScene(_sceneStack.peek());
     }
 
     @Override
@@ -81,13 +105,16 @@ public class Chat extends Application {
         _instance = this;
         this.stage = primaryStage;
         this.stage.setTitle("Hello World!");
-        this.stage.setScene(new MainScene());
+        pushScene(new MainScene());
         this.stage.show();
     }
 
     @Override
     public void stop() {
-        this.killServer();
+        killServer();
+        while (!_sceneStack.empty()) {
+            _sceneStack.pop().shutdown();
+        }
     }
 
     /**

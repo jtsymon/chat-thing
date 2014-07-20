@@ -16,6 +16,7 @@
  */
 package chat;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.SimpleIntegerProperty;
@@ -26,36 +27,64 @@ import javafx.beans.property.StringProperty;
  *
  * @author jts
  */
-
-
 public class ServerInfo {
 
     private StringProperty name;
-    public void setName(String value) { nameProperty().set(value); }
-    public String getName() { return nameProperty().get(); }
-    public StringProperty nameProperty() { 
+
+    public void setName(String value) {
+        nameProperty().set(value);
+    }
+
+    public String getName() {
+        return nameProperty().get();
+    }
+
+    public StringProperty nameProperty() {
         return name;
     }
 
     private StringProperty hostname;
-    public void setAddress(String value) { addressProperty().set(value); }
-    public String getAddress() { return addressProperty().get(); }
+
+    public void setAddress(String value) {
+        addressProperty().set(value);
+    }
+
+    public String getAddress() {
+        return addressProperty().get();
+    }
+
     public StringProperty addressProperty() {
         return hostname;
     }
 
     private IntegerProperty port;
-    public void setPort(Integer value) { portProperty().set(value); }
-    public Integer getPort() { return portProperty().get(); }
-    public IntegerProperty portProperty() { 
+
+    public void setPort(Integer value) {
+        portProperty().set(value);
+    }
+
+    public Integer getPort() {
+        return portProperty().get();
+    }
+
+    public IntegerProperty portProperty() {
         return port;
     }
 
     private InetAddress addr;
-    public ServerInfo(InetAddress address, int port) {
-        this.name = new SimpleStringProperty("...");
+
+    public ServerInfo(String name, InetAddress address, int port) {
+        this.name = new SimpleStringProperty(name);
         this.addr = address;
         this.hostname = new SimpleStringProperty(address.getHostName());
         this.port = new SimpleIntegerProperty(port);
+    }
+
+    public void connect(String password) {
+        try {
+            Chat.pushScene(new ServerScene(password, InetAddress.getByName(this.getAddress()), this.getPort()));
+        } catch (IOException ioe) {
+            System.err.println(ioe);
+        }
     }
 }

@@ -20,48 +20,63 @@ import java.io.IOException;
 import java.net.InetAddress;
 import javafx.event.ActionEvent;
 import javafx.geometry.Pos;
-import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.TextField;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
 /**
  *
  * @author jts
  */
-public class ServerCreatorScene extends Scene {
+public class ServerCreatorScene extends ChatScene {
 
-    private static VBox init() {
-        TextField serverName = new TextField();
-        serverName.setPromptText("Server Name");
-        serverName.setMaxWidth(200);
-        TextField serverPassword = new TextField();
-        serverPassword.setPromptText("Server Password");
-        serverPassword.setMaxWidth(200);
-        Button accept = new Button("Accept");
-        accept.setOnAction((ActionEvent e) -> {
-            String name = serverName.getText().trim();
+    public ServerCreatorScene() {
+        super(new VBox(), 600, 400);
+        
+        TextField serverNameField = new TextField();
+        serverNameField.setPromptText("Server Name");
+        serverNameField.setMaxWidth(200);
+        
+        TextField serverPasswordField = new TextField();
+        serverPasswordField.setPromptText("Server Password");
+        serverPasswordField.setMaxWidth(200);
+        
+        CheckBox publicCheckBox = new CheckBox("Public");
+        
+        VBox main = new VBox(8);
+        main.setAlignment(Pos.CENTER);
+        VBox.setVgrow(main, Priority.ALWAYS);
+        main.getChildren().addAll(serverNameField, serverPasswordField, publicCheckBox);
+        
+        Button acceptButton = new Button("Accept");
+        acceptButton.setPrefWidth(100);
+        acceptButton.setOnAction((ActionEvent e) -> {
+            String name = serverNameField.getText().trim();
             if (name.length() > 0) {
-                String password = serverPassword.getText();
+                String password = serverPasswordField.getText();
+                boolean isPublic = publicCheckBox.isSelected();
                 try {
-                    int port = Chat.initServer(name, password).port;
-                    Chat.setScene(new ServerScene(password, InetAddress.getLocalHost(), port));
+                    int port = Chat.initServer(name, password, isPublic).port;
+                    Chat.pushScene(new ServerScene(password, InetAddress.getLocalHost(), port));
                 } catch (IOException ioe) {
                     System.err.println("Failed to create server: " + ioe.getLocalizedMessage());
                 }
             }
         });
-        Button cancel = new Button("Cancel");
-        cancel.setOnAction((ActionEvent e) -> {
-            Chat.setScene(new MainScene());
-        });
-        VBox layout = new VBox(8);
-        layout.setAlignment(Pos.CENTER);
-        layout.getChildren().addAll(serverName, serverPassword, accept, cancel);
-        return layout;
+        
+        HBox controls = ChatScene.defaultControls();
+        controls.getChildren().add(0, acceptButton);
+        
+        VBox root = (VBox) this.getRoot();
+        root.setAlignment(Pos.CENTER);
+        root.getChildren().addAll(main, controls);
     }
 
-    public ServerCreatorScene() {
-        super(init(), 600, 400);
+    @Override
+    public void shutdown() {
+
     }
 }
