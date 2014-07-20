@@ -16,6 +16,7 @@
  */
 package chat;
 
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 
 /**
@@ -31,5 +32,24 @@ public class Encoding {
         System.arraycopy(str, 0, buf, 0, str.length);
         buf[str.length] = -1;
         return ByteBuffer.wrap(buf);
+    }
+    
+    public static byte[] encodeInfoBuffer(String name, int port) {
+        byte[] nameBuffer = name.getBytes(Chat.charset);
+        byte[] infoBuffer = new byte[2 + 1 + nameBuffer.length];
+        infoBuffer[0] = (byte) ((port >> 8) & 0xFF);
+        infoBuffer[1] = (byte) ((port) & 0xFF);
+        infoBuffer[2] = (byte) nameBuffer.length;
+        System.arraycopy(nameBuffer, 0, infoBuffer, 3, nameBuffer.length);
+        return infoBuffer;
+    }
+    
+    public static ServerInfo decodeInfoBuffer(InetAddress source, byte[] infoBuffer) {
+        int port = ((infoBuffer[0] & 0xFF) << 8) | (infoBuffer[1] & 0xFF);
+        byte[] nameBuffer = new byte[infoBuffer[2]];
+        System.arraycopy(infoBuffer, 3, nameBuffer, 0, nameBuffer.length);
+        ServerInfo server = new ServerInfo(source, port);
+        server.setName(new String(nameBuffer, Chat.charset));
+        return server;
     }
 }

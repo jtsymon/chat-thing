@@ -34,8 +34,8 @@ public class MainScene extends Scene {
         TextField username = new TextField(Chat.getUsername());
         username.setPromptText("Username");
         username.setMaxWidth(200);
-        Button findServer = new Button("Find Server");
-        findServer.setOnAction((ActionEvent e) -> {
+        Button serverList = new Button("Servers");
+        serverList.setOnAction((ActionEvent e) -> {
             if (Chat.setUsername(username.getText())) {
                 Chat.setScene(new ServerBrowserScene());
             }
@@ -54,7 +54,7 @@ public class MainScene extends Scene {
         });
         VBox layout = new VBox(8);
         layout.setAlignment(Pos.CENTER);
-        layout.getChildren().addAll(username, findServer, connectServer, createServer);
+        layout.getChildren().addAll(username, serverList, connectServer, createServer);
         return layout;
     }
     

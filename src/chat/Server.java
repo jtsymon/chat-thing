@@ -19,10 +19,12 @@ package chat;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.MulticastSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -40,6 +42,19 @@ public class Server extends Thread {
     public static final byte[] MAGIC_PACKET = {'#', 'y', 'o', 'l', 'o', 's', 'w', 'a', 'g'};
     public static final int MAX_NAME_LENGTH = 32;
     public static final int MAX_PASSWORD_LENGTH = 254;
+    public static final int DEFAULT_PORT = 50505;
+    public static final InetAddress BROADCAST_IP;
+    static {
+        InetAddress tmp = null;
+        try {
+            tmp = InetAddress.getByName("239.6.6.6");
+        } catch (UnknownHostException e) {
+            System.err.println(e);
+            System.err.println("Failed to get broadcast IP");
+            System.exit(1);
+        }
+        BROADCAST_IP = tmp;
+    }
 
     /**
      * Listens for broadcast packets requesting information about servers
@@ -50,34 +65,39 @@ public class Server extends Thread {
         private final DatagramSocket socket;
 
         public BroadcastListener() throws IOException {
-            this.listener = new MulticastSocket(50505);
+            this.listener = new MulticastSocket(DEFAULT_PORT);
             this.listener.setSoTimeout(100);
             this.socket = new DatagramSocket();
         }
 
         @Override
         public void run() {
-            MULTICAST_LISTEN:
-            while (Server.this._running) {
-                try {
-                    DatagramPacket dp = new DatagramPacket(new byte[MAGIC_PACKET.length], MAGIC_PACKET.length);
-                    this.listener.receive(dp);
-                    byte[] packet = dp.getData();
-                    if (dp.getLength() != MAGIC_PACKET.length) {
-                        continue;
-                    }
-                    for (int i = 0; i < MAGIC_PACKET.length; i++) {
-                        if (MAGIC_PACKET[i] != packet[i]) {
-                            continue MULTICAST_LISTEN;
+            try {
+                this.listener.joinGroup(BROADCAST_IP);
+                MULTICAST_LISTEN:
+                while (Server.this._running) {
+                    try {
+                        DatagramPacket dp = new DatagramPacket(new byte[MAGIC_PACKET.length], MAGIC_PACKET.length);
+                        this.listener.receive(dp);
+                        byte[] packet = dp.getData();
+                        if (dp.getLength() != MAGIC_PACKET.length) {
+                            continue;
                         }
+                        for (int i = 0; i < MAGIC_PACKET.length; i++) {
+                            if (MAGIC_PACKET[i] != packet[i]) {
+                                continue MULTICAST_LISTEN;
+                            }
+                        }
+                        dp = new DatagramPacket(Server.this.infoBuffer, Server.this.infoBuffer.length, dp.getAddress(), dp.getPort());
+                        this.socket.send(dp);
+                    } catch (SocketTimeoutException e) {
+                        // do nothing (timeouts are enabled so we can stop the server cleanly)
+                    } catch (IOException e) {
+                        System.err.println(e);
                     }
-                    dp = new DatagramPacket(Server.this.infoBuffer, Server.this.infoBuffer.length, dp.getAddress(), dp.getPort());
-                    this.socket.send(dp);
-                } catch (SocketTimeoutException e) {
-                    // do nothing (timeouts are enabled so we can stop the server cleanly)
-                } catch (IOException e) {
-                    System.err.println(e);
                 }
+            } catch (IOException e) {
+                System.err.println(e);
             }
         }
     }
@@ -113,17 +133,17 @@ public class Server extends Thread {
         if (password.length() > MAX_PASSWORD_LENGTH) {
             throw new IOException("Server password too long!");
         }
-        this.updateName(name);
         this.passBuffer = password.getBytes(Chat.charset);
         this.multicastListener = new BroadcastListener();
         this.ssc = ServerSocketChannel.open();
         try {
             // try default port
-            this.ssc.socket().bind(new InetSocketAddress(50505));
+            this.ssc.socket().bind(new InetSocketAddress(DEFAULT_PORT));
         } catch (IOException e) {
-            this.ssc.socket().bind(new InetSocketAddress(0));
+            this.ssc.socket().bind(null);
         }
         this.port = this.ssc.socket().getLocalPort();
+        this.updateName(name);
         this.generateWelcomeMessage();
         this.ssc.configureBlocking(false);
         this.selector = Selector.open();
@@ -209,12 +229,7 @@ public class Server extends Thread {
     
     private void updateName(String name) {
         this.name = name;
-        byte[] nameBuffer = name.getBytes(Chat.charset);
-        this.infoBuffer = new byte[2 + 1 + nameBuffer.length];
-        this.infoBuffer[0] = (byte) ((this.port >> 8) & 0xFF);
-        this.infoBuffer[1] = (byte) ((this.port) & 0xFF);
-        this.infoBuffer[2] = (byte) nameBuffer.length;
-        System.arraycopy(nameBuffer, 0, this.infoBuffer, 3, nameBuffer.length);
+        this.infoBuffer = Encoding.encodeInfoBuffer(this.name, this.port);
         this.generateWelcomeMessage();
     }
 
