@@ -32,6 +32,10 @@ import javafx.scene.layout.VBox;
  */
 public class ServerConnectScene extends ChatScene {
 
+    {
+        name = "Direct Connect";
+    }
+    
     public ServerConnectScene() {
         super(new VBox(), 600, 400);
         

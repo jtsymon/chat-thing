@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.Stack;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.stage.Stage;
 
 /**
@@ -57,6 +58,26 @@ public class Chat extends Application {
             _server = null;
         }
     }
+    
+    public static void setName(String name) {
+        if (Platform.isFxApplicationThread()) {
+            _instance.stage.setTitle(name);
+        } else {
+            Platform.runLater(() -> {
+                setName(name);
+            });
+        }
+    }
+    
+    public static void setName() {
+        if (Platform.isFxApplicationThread()) {
+            setName(_sceneStack.peek().getName());
+        } else {
+            Platform.runLater(() -> {
+                setName(_sceneStack.peek().getName());
+            });
+        }
+    }
 
     public static boolean setUsername(String username) {
         username = username.trim();
@@ -74,9 +95,16 @@ public class Chat extends Application {
      * @param scene
      */
     public static void setScene(ChatScene scene) {
-        _sceneStack.pop();
-        _sceneStack.push(scene);
-        _instance.stage.setScene(scene);
+        if (Platform.isFxApplicationThread()) {
+            _sceneStack.pop();
+            _sceneStack.push(scene);
+            _instance.stage.setScene(scene);
+            setName();
+        } else {
+            Platform.runLater(() -> {
+                setScene(scene);
+            });
+        }
     }
 
     /**
@@ -84,27 +112,40 @@ public class Chat extends Application {
      *
      * @param scene
      */
-    public static void pushScene(ChatScene scene) {
-        _sceneStack.push(scene);
-        _instance.stage.setScene(scene);
+    public static void pushScene(final ChatScene scene) {
+        if (Platform.isFxApplicationThread()) {
+            _sceneStack.push(scene);
+            _instance.stage.setScene(_sceneStack.peek());
+            setName();
+        } else {
+            Platform.runLater(() -> {
+                pushScene(scene);
+            });
+        }
     }
 
     /**
      * Sets the current scene to the scene from the top of the stack
      */
     public static void popScene() {
-        _sceneStack.pop().shutdown();
-        if (_sceneStack.empty()) {
-            _sceneStack.push(new MainScene());
+        if (Platform.isFxApplicationThread()) {
+            _sceneStack.pop().shutdown();
+            if (_sceneStack.empty()) {
+                _sceneStack.push(new MainScene());
+            }
+            _instance.stage.setScene(_sceneStack.peek());
+            setName();
+        } else {
+            Platform.runLater(() -> {
+                popScene();
+            });
         }
-        _instance.stage.setScene(_sceneStack.peek());
     }
 
     @Override
     public void start(Stage primaryStage) {
         _instance = this;
         this.stage = primaryStage;
-        this.stage.setTitle("Hello World!");
         pushScene(new MainScene());
         this.stage.show();
     }

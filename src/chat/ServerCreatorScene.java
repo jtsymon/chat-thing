@@ -33,6 +33,10 @@ import javafx.scene.layout.VBox;
  */
 public class ServerCreatorScene extends ChatScene {
 
+    {
+        name = "Create Server";
+    }
+    
     public ServerCreatorScene() {
         super(new VBox(), 600, 400);
         

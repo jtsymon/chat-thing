@@ -46,6 +46,10 @@ import javafx.util.Callback;
  * TODO: Add some way to add more remote server sources
  */
 public class ServerBrowserScene extends ChatScene {
+    
+    {
+        name = "Server Browser";
+    }
 
     private class ClickableCellFactory<T> implements Callback<TableColumn<ServerInfo, T>, TableCell<ServerInfo, T>> {
 

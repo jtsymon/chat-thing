@@ -31,6 +31,8 @@ import javafx.scene.layout.VBox;
  */
 public abstract class ChatScene extends Scene {
     
+    protected String name = "Chat";
+    
     public static HBox defaultControls() {
         HBox controls = new HBox(8);
         controls.setAlignment(Pos.CENTER_RIGHT);
@@ -52,4 +54,8 @@ public abstract class ChatScene extends Scene {
      * Prepare to be closed, clean up any background threads
      */
     public abstract void shutdown();
+    
+    public String getName() {
+        return this.name;
+    }
 }

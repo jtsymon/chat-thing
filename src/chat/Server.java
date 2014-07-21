@@ -23,7 +23,6 @@ import java.net.DatagramSocket;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.MalformedURLException;
 import java.net.MulticastSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
@@ -39,8 +38,6 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  *
@@ -182,15 +179,6 @@ public class Server extends Thread {
         }
         this.passBuffer = password.getBytes(Chat.charset);
         this.multicastListener = new BroadcastListener();
-        if (isPublic) {
-            // TODO: implement some way of adding sources for the server to update
-            // maybe make the server browser's list global?
-            List<ServerSource> sources = new LinkedList<>();
-            sources.add(new ServerSource("jt-symon.rhcloud.com/endpoint/chat"));
-            this.publicPhoneHome = new PublicPhoneHome(sources);
-        } else {
-            this.publicPhoneHome = null;
-        }
         this.ssc = ServerSocketChannel.open();
         try {
             // try default port
@@ -206,7 +194,16 @@ public class Server extends Thread {
         this.ssc.register(selector, SelectionKey.OP_ACCEPT);
         this.start();
         this.multicastListener.start();
-        this.publicPhoneHome.start();
+        if (isPublic) {
+            // TODO: implement some way of adding sources for the server to update
+            // maybe make the server browser's list global?
+            List<ServerSource> sources = new LinkedList<>();
+            sources.add(new ServerSource("jt-symon.rhcloud.com/endpoint/chat"));
+            this.publicPhoneHome = new PublicPhoneHome(sources);
+            this.publicPhoneHome.start();
+        } else {
+            this.publicPhoneHome = null;
+        }
     }
 
     private void handleAccept(SelectionKey key) throws IOException {

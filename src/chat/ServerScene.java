@@ -42,7 +42,12 @@ import javafx.scene.text.FontWeight;
  * @author jts
  */
 public class ServerScene extends ChatScene {
-
+    
+    @Override
+    public String getName() {
+        return "Chat - " + this.serverName.getText();
+    }
+    
     public class ServerConnection extends Thread {
 
         private final Socket socket;
@@ -83,6 +88,7 @@ public class ServerScene extends ChatScene {
                         final String chat_name = new String(buf, 3, length, Chat.charset);
                         Platform.runLater(() -> {
                             ServerScene.this.serverName.setText(chat_name);
+                            Chat.setName();
                         });
                         break;
                     case ControlMessages.USER_RENAME:
@@ -156,6 +162,9 @@ public class ServerScene extends ChatScene {
                     }
                 }
             } catch (IOException e) {
+                // do nothing (pop scene below)
+            }
+            if (this._running) {
                 Chat.popScene();
             }
             Chat.killServer();
