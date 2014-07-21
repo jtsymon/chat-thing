@@ -226,7 +226,6 @@ public class ServerScene extends ChatScene {
         VBox.setVgrow(main, Priority.ALWAYS);
         main.getChildren().addAll(this.messages, sidebar);
         
-        
         TextField inputField = new TextField();
         inputField.setOnAction((ActionEvent e) -> {
             if (inputField.getText().trim().length() > 0) {

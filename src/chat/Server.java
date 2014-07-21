@@ -441,6 +441,9 @@ public class Server extends Thread {
         System.err.println("Waiting for server to exit...");
         try {
             this.selector.wakeup();
+            for (SelectionKey key : this.selector.keys()) {
+                key.channel().close();
+            }
             this.ssc.close();
             this.join();
             this.multicastListener.join();
