@@ -16,6 +16,8 @@
  */
 package chat;
 
+import java.io.IOException;
+import java.net.InetAddress;
 import java.util.LinkedList;
 import java.util.List;
 import javafx.beans.property.SimpleStringProperty;
@@ -73,7 +75,11 @@ public class ServerBrowserScene extends ChatScene {
                     TableCell<ServerInfo, T> clicked = (TableCell) event.getSource();
                     ServerInfo server = (ServerInfo) clicked.getTableRow().getItem();
                     if (server != null) {
-                        server.connect(ServerBrowserScene.this.password.getValue());
+                        try {
+                            server.connect(ServerBrowserScene.this.password.getValue());
+                        } catch (IOException ioe) {
+                            System.err.println("Failed to connect to server: " + ioe.getLocalizedMessage());
+                        }
                     }
                 }
             });
@@ -121,7 +127,11 @@ public class ServerBrowserScene extends ChatScene {
         connectButton.setOnAction((ActionEvent e) -> {
             ServerInfo server = serverList.getSelectionModel().getSelectedItem();
             if (server != null) {
-                server.connect(this.password.getValue());
+                try {
+                    server.connect(this.password.getValue());
+                } catch (IOException ioe) {
+                    System.err.println("Failed to connect to server: " + ioe.getLocalizedMessage());
+                }
             }
         });
         HBox.setHgrow(connectButton, Priority.NEVER);

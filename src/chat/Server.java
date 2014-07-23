@@ -30,6 +30,9 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.nio.channels.CancelledKeyException;
+import java.nio.channels.ClosedChannelException;
+import java.nio.channels.SelectableChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
@@ -38,6 +41,8 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
@@ -55,9 +60,9 @@ public class Server extends Thread {
         InetAddress tmp = null;
         try {
             tmp = InetAddress.getByName("239.6.6.6");
-        } catch (UnknownHostException e) {
-            System.err.println(e);
-            System.err.println("Failed to get broadcast IP");
+        } catch (UnknownHostException ex) {
+            Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, "Failed to get broadcast IP");
             System.exit(1);
         }
         BROADCAST_IP = tmp;
@@ -99,12 +104,12 @@ public class Server extends Thread {
                         this.socket.send(dp);
                     } catch (SocketTimeoutException e) {
                         // do nothing (timeouts are enabled so we can stop the server cleanly)
-                    } catch (IOException e) {
-                        System.err.println(e);
+                    } catch (IOException ex) {
+                        Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
                     }
                 }
-            } catch (IOException e) {
-                System.err.println(e);
+            } catch (IOException ex) {
+                Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
     }
@@ -127,19 +132,19 @@ public class Server extends Thread {
                         try {
                             HttpURLConnection connection = (HttpURLConnection)new URL("http://" + source.getAddress() + info).openConnection();
                             connection.getResponseCode();
-                        } catch (IOException e) {
-                            System.err.println(e);
+                        } catch (IOException ex) {
+                            Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
                         }
                     }
-                } catch (UnsupportedEncodingException e) {
-                    System.err.println("Failed to URL encode server info");
-                    System.err.println(e);
+                } catch (UnsupportedEncodingException ex) {
+                    Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
+                    Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, "Failed to URL encode server info");
                     break;
                 }
                 try {
                     Thread.sleep(60000);
-                } catch (InterruptedException e) {
-                    System.err.println(e);
+                } catch (InterruptedException ex) {
+                    Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
         }
@@ -249,6 +254,7 @@ public class Server extends Thread {
                         } else {
                             identifyUser(user, key);
                         }
+                        user.buffer.clear();
                         user.buffer.put(remainder);
                         i = 0;
                     } else {
@@ -291,44 +297,48 @@ public class Server extends Thread {
         user.buffer.flip();
         byte[] data = new byte[user.buffer.limit() - 1];
         user.buffer.get(data);
-        // check for special codes
-        if (data[0] == ControlMessages.CONTROL_MESSAGE_ID) {
-            switch (data[1]) {
-                case 1: // user list
-                    for (SelectionKey other : selector.keys()) {
-                        if (!other.equals(key) && other.isValid() && other.channel() instanceof SocketChannel) {
-                            User otherUser = (User) other.attachment();
-                            tellRaw(key, ControlMessages.user_join_silent(otherUser.username));
+        if (data.length > 0) {
+            // check for special codes
+            if (data[0] == ControlMessages.CONTROL_MESSAGE_ID) {
+                switch (data[1]) {
+                    case 1: // user list
+                        for (SelectionKey other : selector.keys()) {
+                            if (!other.equals(key) && other.isValid() && other.channel() instanceof SocketChannel) {
+                                User otherUser = (User) other.attachment();
+                                if (otherUser.identified) {
+                                    tellRaw(key, ControlMessages.user_join_silent(otherUser.username));
+                                }
+                            }
                         }
-                    }
-                    break;
+                        break;
+                }
+                // check for user commands
+            } else if (data[0] == '/') {
+                String[] command = new String(data, Chat.charset).split("\\s+", 2);
+                switch (command[0].toLowerCase()) {
+                    case "/welcome":
+                        this.welcomeTokens = command[1].split("\\$name", -1);
+                        this.generateWelcomeMessage();
+                        break;
+                    case "/name":
+                        if (command[1].length() > MAX_NAME_LENGTH) {
+                            tell(key, "Cannot set the name (too long)");
+                        } else {
+                            this.updateName(command[1]);
+                            broadcastRaw(ControlMessages.chat_name(this.name));
+                        }
+                        break;
+                    case "/nick":
+                        if (command[1].length() > MAX_NAME_LENGTH) {
+                            tell(key, "Cannot set the nick (too long)");
+                        } else {
+                            broadcastRaw(ControlMessages.user_rename(user.username, command[1]));
+                            user.username = command[1];
+                        }
+                }
+            } else {
+                this.broadcast(user.username + ": " + new String(data, Chat.charset));
             }
-            // check for user commands
-        } else if (data[0] == '/') {
-            String[] command = new String(data, Chat.charset).split("\\s+", 2);
-            switch (command[0].toLowerCase()) {
-                case "/welcome":
-                    this.welcomeTokens = command[1].split("\\$name");
-                    this.generateWelcomeMessage();
-                    break;
-                case "/name":
-                    if (command[1].length() > MAX_NAME_LENGTH) {
-                        tell(key, "Cannot set the name (too long)");
-                    } else {
-                        this.updateName(command[1]);
-                        broadcastRaw(ControlMessages.chat_name(this.name));
-                    }
-                    break;
-                case "/nick":
-                    if (command[1].length() > MAX_NAME_LENGTH) {
-                        tell(key, "Cannot set the nick (too long)");
-                    } else {
-                        broadcastRaw(ControlMessages.user_rename(user.username, command[1]));
-                        user.username = command[1];
-                    }
-            }
-        } else {
-            this.broadcast(user.username + ": " + new String(data, Chat.charset));
         }
         user.buffer.clear();
     }
@@ -385,8 +395,13 @@ public class Server extends Thread {
         for (SelectionKey key : selector.keys()) {
             if (key.isValid() && key.channel() instanceof SocketChannel && ((User) key.attachment()).identified) {
                 SocketChannel sch = (SocketChannel) key.channel();
-                sch.write(msgBuf);
-                msgBuf.rewind();
+                try {
+                    sch.write(msgBuf);
+                    msgBuf.rewind();
+                } catch (IOException ex) {
+                    // socket is closed / broken
+                    killUser(key);
+                }
             }
         }
     }
@@ -396,19 +411,36 @@ public class Server extends Thread {
         for (SelectionKey key : selector.keys()) {
             if (key.isValid() && key.channel() instanceof SocketChannel) {
                 SocketChannel sch = (SocketChannel) key.channel();
-                sch.write(msgBuf);
-                msgBuf.rewind();
+                try {
+                    sch.write(msgBuf);
+                    msgBuf.rewind();
+                } catch (IOException ex) {
+                    // socket is closed / broken
+                    killUser(key);
+                }
             }
         }
     }
 
     private void tell(SelectionKey key, String msg) throws IOException {
         ByteBuffer msgBuf = Encoding.byteEncode(msg);
-        ((SocketChannel) key.channel()).write(msgBuf);
+        SocketChannel sch = (SocketChannel) key.channel();
+        try {
+            sch.write(msgBuf);
+        } catch (IOException ex) {
+            // socket is closed / broken
+            killUser(key);
+        }
     }
 
     private void tellRaw(SelectionKey key, byte[] buf) throws IOException {
-        ((SocketChannel) key.channel()).write(ByteBuffer.wrap(buf));
+        SocketChannel sch = (SocketChannel) key.channel();
+        try {
+            sch.write(ByteBuffer.wrap(buf));
+        } catch (IOException ex) {
+            // socket is closed / broken
+            killUser(key);
+        }
     }
 
     @Override
@@ -423,28 +455,39 @@ public class Server extends Thread {
                 while (iter.hasNext()) {
                     key = iter.next();
                     iter.remove();
-                    if (key.isAcceptable()) {
-                        this.handleAccept(key);
-                    }
-                    if (key.isReadable()) {
-                        this.handleRead(key);
+                    try {
+                        if (key.isAcceptable()) {
+                            this.handleAccept(key);
+                        }
+                        if (key.isReadable()) {
+                            this.handleRead(key);
+                        }
+                    } catch (CancelledKeyException | ClosedChannelException e) {
+                        killUser(key);
                     }
                 }
-            } catch (IOException e) {
-                System.err.println(e);
+            } catch (IOException ex) {
+                Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
     }
 
     public void shutdown() {
-        this._running = false;
-        System.err.println("Waiting for server to exit...");
         try {
+            this._running = false;
+            System.err.println("Waiting for server to exit...");
             this.selector.wakeup();
-            for (SelectionKey key : this.selector.keys()) {
-                key.channel().close();
-            }
+            this.ssc.socket().close();
             this.ssc.close();
+            synchronized (this.selector) {
+                for (SelectionKey key : this.selector.keys()) {
+                    SelectableChannel channel = key.channel();
+                    if (channel instanceof SocketChannel) {
+                        ((SocketChannel)key.channel()).socket().close();
+                    }
+                }
+                this.selector.close();
+            }
             this.join();
             this.multicastListener.join();
             if (this.publicPhoneHome != null) {
@@ -452,8 +495,8 @@ public class Server extends Thread {
                 this.publicPhoneHome.join();
             }
             System.err.println("Server exited cleanly");
-        } catch (IOException | InterruptedException e) {
-            System.err.println(e);
+        } catch (IOException|InterruptedException ex) {
+            Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
 }

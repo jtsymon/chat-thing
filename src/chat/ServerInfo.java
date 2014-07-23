@@ -80,11 +80,7 @@ public class ServerInfo {
         this.port = new SimpleIntegerProperty(port);
     }
 
-    public void connect(String password) {
-        try {
-            Chat.pushScene(new ServerScene(password, InetAddress.getByName(this.getAddress()), this.getPort()));
-        } catch (IOException ioe) {
-            System.err.println(ioe);
-        }
+    public void connect(String password) throws IOException {
+        Chat.pushScene(new ServerScene(password, InetAddress.getByName(this.getAddress()), this.getPort()));
     }
 }

@@ -17,10 +17,7 @@
 package chat;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.InetAddress;
-import java.net.Socket;
-import java.net.SocketTimeoutException;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -47,148 +44,6 @@ public class ServerScene extends ChatScene {
     public String getName() {
         return "Chat - " + this.serverName.getText();
     }
-    
-    public class ServerConnection extends Thread {
-
-        private final Socket socket;
-        private boolean _running = true;
-        private final String password;
-
-        public ServerConnection(InetAddress addr, String password, int port) throws IOException {
-            this.socket = new Socket(addr, port);
-            this.socket.setSoTimeout(100);
-            this.password = password;
-            this.start();
-        }
-
-        private void handleMessage(byte[] buf, int n) {
-            if (buf[0] == ControlMessages.CONTROL_MESSAGE_ID) {
-
-                int length = buf[2];
-
-                switch (buf[1]) {
-                    case ControlMessages.USER_JOINED:
-                    case ControlMessages.USER_JOINED_SILENT:
-                        final String joined_name = new String(buf, 3, length, Chat.charset);
-                        Platform.runLater(() -> {
-                            ServerScene.this.peers.add(joined_name);
-                            if (buf[1] == ControlMessages.USER_JOINED) {
-                                ServerScene.this.messages.appendText(joined_name + " joined the chat\n");
-                            }
-                        });
-                        break;
-                    case ControlMessages.USER_LEFT:
-                        final String left_name = new String(buf, 3, length, Chat.charset);
-                        Platform.runLater(() -> {
-                            ServerScene.this.peers.remove(left_name);
-                            ServerScene.this.messages.appendText(left_name + " left the chat\n");
-                        });
-                        break;
-                    case ControlMessages.CHAT_NAME:
-                        final String chat_name = new String(buf, 3, length, Chat.charset);
-                        Platform.runLater(() -> {
-                            ServerScene.this.serverName.setText(chat_name);
-                            Chat.setName();
-                        });
-                        break;
-                    case ControlMessages.USER_RENAME:
-                        for (int i = 3; i < n; i++) {
-                            if (buf[i] == 0) {
-                                final String prevName = new String(buf, 3, i - 3, Chat.charset);
-                                final String newName = new String(buf, i + 1, length - i + 2, Chat.charset);
-                                Platform.runLater(() -> {
-                                    int index = ServerScene.this.peers.indexOf(prevName);
-                                    ServerScene.this.peers.set(index, newName);
-                                    ServerScene.this.messages.appendText(prevName + " changed their name to " + newName + "\n");
-                                });
-                                break;
-                            }
-                        }
-                }
-            } else {
-                final String message = new String(buf, 0, n, Chat.charset);
-                Platform.runLater(() -> {
-                    ServerScene.this.messages.appendText(message + "\n");
-                });
-            }
-        }
-
-        @Override
-        public void run() {
-            try {
-                InputStream is = this.socket.getInputStream();
-                // identify with the server
-                {
-                    byte[] nameBuffer = Chat.getUsername().getBytes(Chat.charset);
-                    byte[] passBuffer = this.password.getBytes(Chat.charset);
-                    byte[] ident = new byte[1 + nameBuffer.length + 1 + passBuffer.length + 1];
-                    ident[0] = (byte) nameBuffer.length;
-                    ident[1] = (byte) passBuffer.length;
-                    System.arraycopy(nameBuffer, 0, ident, 2, nameBuffer.length);
-                    System.arraycopy(passBuffer, 0, ident, 2 + nameBuffer.length, passBuffer.length);
-                    ident[1 + nameBuffer.length + 1 + passBuffer.length] = (byte) -1;
-                    this.socket.getOutputStream().write(ident);
-                }
-                // ask for list of users
-                this.socket.getOutputStream().write(new byte[]{5, 1, -1});
-                byte[] buf = new byte[1024];
-                byte[] swap = new byte[1024];
-                int pos = 0;
-                while (this._running) {
-                    try {
-                        int n = is.read(buf, pos, buf.length - pos);
-                        if (n == -1) {
-                            break;
-                        }
-                        for (int i = pos, end = pos + n; i < end; i++) {
-                            if (buf[i] == -1) {
-                                buf[i] = 0;
-                                if (++i < end) {
-                                    end -= i;
-                                    System.arraycopy(buf, i, swap, 0, end);
-                                    byte[] tmp = buf;
-                                    handleMessage(buf, i);
-                                    buf = swap;
-                                    swap = tmp;
-                                    i = 0;
-                                } else {
-                                    handleMessage(buf, i);
-                                    break;
-                                }
-                            }
-                        }
-                    } catch (SocketTimeoutException e) {
-                        // do nothing (timeouts are enabled so we can stop the server cleanly)
-                    }
-                }
-            } catch (IOException e) {
-                // do nothing (pop scene below)
-            }
-            if (this._running) {
-                Chat.popScene();
-            }
-            Chat.killServer();
-        }
-
-        public void send(String message) {
-            try {
-                this.socket.getOutputStream().write(message.getBytes(Chat.charset));
-                this.socket.getOutputStream().write(-1);
-            } catch (IOException e) {
-                System.err.println(e);
-            }
-        }
-
-        public void shutdown() {
-            this._running = false;
-            try {
-                this.socket.close();
-                this.join();
-            } catch (InterruptedException | IOException e) {
-                System.err.println(e);
-            }
-        }
-    }
 
     private final ObservableList<String> peers = FXCollections.observableArrayList();
     public final ServerConnection serverConnection;
@@ -198,11 +53,41 @@ public class ServerScene extends ChatScene {
     public ServerScene(String password, InetAddress addr, int port) throws IOException {
         super(new VBox(), 600, 400);
 
-        if (password.length() > Server.MAX_PASSWORD_LENGTH) {
-            throw new IOException("Server password too long!");
-        }
-
-        this.serverConnection = new ServerConnection(addr, password, port);
+        this.serverConnection = new ServerConnection(addr, password, port,
+                (final String message) -> {
+                    Platform.runLater(() -> {
+                        this.messages.appendText(message + "\n");
+                    });
+                }, (final String joinedName, final boolean display) -> {
+                    Platform.runLater(() -> {
+                        this.peers.add(joinedName);
+                        if (display) {
+                            this.messages.appendText(joinedName + " joined the chat\n");
+                        }
+                    });
+                }, (final String leftName) -> {
+                    Platform.runLater(() -> {
+                        this.peers.remove(leftName);
+                        this.messages.appendText(leftName + " left the chat\n");
+                    });
+                }, (final String chatName) -> {
+                    Platform.runLater(() -> {
+                        this.serverName.setText(chatName);
+                        Chat.setName();
+                    });
+                }, (final String prevName, final String newName) -> {
+                    Platform.runLater(() -> {
+                        int index = this.peers.indexOf(prevName);
+                        this.peers.set(index, newName);
+                        this.messages.appendText(prevName + " changed their name to " + newName + "\n");
+                    });
+                }, (final boolean running) -> {
+                    if (running) {
+                        Chat.popScene();
+                    }
+                }
+        );
+        this.serverConnection.start();
 
         this.messages = new TextArea("");
         this.messages.setEditable(false);

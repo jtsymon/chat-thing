@@ -16,8 +16,12 @@
  */
 package chat;
 
+import com.sun.javafx.application.ParametersImpl;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.nio.charset.Charset;
+import java.util.Map;
+import java.util.Random;
 import java.util.Stack;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -129,7 +133,9 @@ public class Chat extends Application {
      */
     public static void popScene() {
         if (Platform.isFxApplicationThread()) {
-            _sceneStack.pop().shutdown();
+            if (!_sceneStack.empty()) {
+                _sceneStack.pop().shutdown();
+            }
             if (_sceneStack.empty()) {
                 _sceneStack.push(new MainScene());
             }
@@ -162,7 +168,56 @@ public class Chat extends Application {
      * @param args the command line arguments
      */
     public static void main(String[] args) {
+        Parameters params = new ParametersImpl(args);
+        Map<String, String> named = params.getNamed();
+        for (String arg : args) {
+            if (arg.equalsIgnoreCase("--help")) {
+                System.err.println("--connect=<hostname>[:<port>] - automatically connect to a server on startup\n" + 
+                                   "--password=<password>         - set the password for automatically connecting\n" +
+                                   "--test=<count>                - open <count> connections to the server\n" +
+                                   "--help                        - display this help message");
+                System.exit(0);
+            }
+        }
+        String username = named.get("username");
+        if (username == null) username = "user_$random";
+        String[] usernameTokens = username.split("\\$random", -1);
+        if (usernameTokens.length > 1) {
+            Random rnd = new Random();
+            StringBuilder usernameBuilder = new StringBuilder(usernameTokens[0]);
+            for (int i = 1; i < usernameTokens.length; i++) {
+                usernameBuilder.append(Integer.toHexString(rnd.nextInt())).append(usernameTokens[i]);
+            }
+            Chat.setUsername(usernameBuilder.toString());
+        } else {
+            Chat.setUsername(username);
+        }
+        String password = named.get("password");
+        if (password == null) password = "";
+        String host = named.get("connect");
+        if (host != null) {
+            String[] serverTokens = host.split(":");
+            try {
+                int port = Server.DEFAULT_PORT;
+                if (serverTokens.length == 2) {
+                    port = Integer.parseInt(serverTokens[1]);
+                }
+                if (serverTokens.length <= 2) {
+                    String test = named.get("test");
+                    if (test != null) {
+                        StressTest.Test(InetAddress.getByName(serverTokens[0]), port, password, Integer.parseInt(test));
+                    } else {
+                        new ChatCLI(password, InetAddress.getByName(serverTokens[0]), port).run();
+                    }
+                } else {
+                    System.err.println("--connect: Expected host in form <hostname>[:<port>]");
+                }
+            } catch (IOException e) {
+                System.err.println("--connect: Failed to connect to server!");
+                System.err.println(e);
+            }
+            System.exit(0);
+        }
         launch(args);
     }
-
 }
