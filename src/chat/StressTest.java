@@ -23,6 +23,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Random;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -35,8 +36,9 @@ public class StressTest {
     public static void Test(InetAddress addr, int port, String password, int n) {
         List<ServerConnection> serverConnections = new LinkedList<>();
         try {
+            Random rnd = new Random();
             for (int i = 0; i < n; i++) {
-                final String name = "Test_" + i;
+                final String name = "Test_" + Integer.toHexString(rnd.nextInt());
                 final FileWriter writer = new FileWriter(new File("./" + name + ".txt"));
                 Chat.setUsername(name);
                 ServerConnection connection = new ServerConnection(addr, password, port,
